@@ -31,11 +31,15 @@ python -m coiner search "France 1 franc 1900" --database data/coiner.sqlite3
 ```
 
 Photo identification sends the image to the OpenAI API. Set `OPENAI_API_KEY`
-in the PowerShell environment first (optionally set `OPENAI_MODEL`):
+in a local `.env` file first. Start by copying the tracked example:
 
 ```powershell
-$env:OPENAI_API_KEY = "your-api-key"
+Copy-Item .env.example .env
 ```
+
+Then replace the placeholder `OPENAI_API_KEY` in `.env` with your API key.
+Never commit `.env`; it is ignored by Git. `OPENAI_MODEL` can be changed there
+if needed.
 
 The local retrieval index uses SQLite FTS5. Live LeFranc/Numista fetching is
 not enabled: populate the JSONL files only from data you are permitted to use,
