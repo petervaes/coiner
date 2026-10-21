@@ -29,6 +29,13 @@ class CoinIdentity:
 
 
 @dataclass(frozen=True)
+class CoinAssessment:
+    identity: CoinIdentity
+    condition: str
+    condition_notes: str | None = None
+
+
+@dataclass(frozen=True)
 class CatalogEntry:
     id: str
     title: str

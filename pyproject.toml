@@ -7,7 +7,7 @@ name = "coiner"
 version = "0.1.0"
 description = "Coin identification and source-backed numismatic catalog lookup"
 requires-python = ">=3.11"
-dependencies = ["python-dotenv>=1.0"]
+dependencies = ["python-dotenv>=1.0", "streamlit>=1.38"]
 
 [project.scripts]
 coiner = "coiner.cli:main"

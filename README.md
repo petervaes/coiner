@@ -3,12 +3,15 @@
 Coiner is a Python command-line prototype for identifying coins from photos and
 looking up source-attributed numismatic catalog prices. It uses an OpenAI vision
 model for image identification and a local SQLite FTS5 index for catalog
-retrieval.
+retrieval, and includes a Streamlit interface for photo inspection and reports.
 
 ## Current capabilities
 
 - Identify a coin from one photo with the OpenAI API.
+- Inspect one or two uploaded coin photos in the Streamlit frontend.
 - Search indexed catalog entries by text.
+- Show the three closest source-attributed catalog entries and download a JSON
+  valuation report.
 - Require exact country and denomination matches, and an exact year match when
   the year was identified, before showing prices for an analyzed coin.
 - Keep each catalog price linked to its source, grade/condition, currency, and
@@ -78,6 +81,18 @@ Search the indexed catalog directly:
 ```powershell
 coiner search "France 1 franc 1935"
 ```
+
+Start the Streamlit frontend:
+
+```powershell
+streamlit run src\coiner\streamlit_app.py
+```
+
+Upload one photo or both sides in the sidebar and select **Inspecteer munt**.
+This sends the uploaded images to OpenAI Vision. The catalog values in this
+prototype are recorded snapshots, not live quotes. A price indication is
+calculated only from EUR entries with the exact same grade; otherwise the app
+explains why it cannot provide a comparable figure.
 
 The module entry point is also available:
 
