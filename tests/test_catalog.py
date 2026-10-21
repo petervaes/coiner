@@ -1,4 +1,5 @@
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -97,9 +98,12 @@ def test_numista_table_import_expands_grade_prices_and_keeps_metadata(
     tmp_path: Path,
 ) -> None:
     project_catalog = Path(__file__).parents[1] / "catalog" / "catalog.json"
+    numista_catalog = tmp_path / "numista"
+    numista_catalog.mkdir()
+    shutil.copyfile(project_catalog, numista_catalog / project_catalog.name)
     index = CatalogIndex(tmp_path / "numista.sqlite3")
 
-    assert index.ingest(project_catalog.parent) == 68
+    assert index.ingest(numista_catalog) == 68
     results = index.search(
         "France 1 franc Morlon 1935",
         limit=10,

@@ -15,15 +15,17 @@ Required fields:
 
 `source` must be `lefranc` or `numista`. `year` and these fields are optional:
 `mint`, `ruler_or_issuer`, `catalog_reference`, and `notes`. Replace the example
-URL and values with verified data before indexing; this repository does not ship
-catalog prices.
+URL and values with verified data before indexing.
 
-Install the CLI The Numista 1 franc Morlon table provided for this project is stored in
+The Numista 1 franc Morlon table provided for this project is stored in
 [`../catalog.json`](../catalog.json). It includes the listed 1931-1941 variants,
 grade prices, mintages, frequencies, and associated LeFranc references. The
 1935 prices are aligned to VF, XF, and AU as shown by the supplied table's
-column positions. Its values are a snapshot entered on the date shown in each
-record, not a claim that the source price list is current.
+column positions. LeFranc's values for the series are stored in
+[`../lefranc_1_franc_morlon.json`](../lefranc_1_franc_morlon.json), retaining
+its own grade scale and EUR/USD values. The source page does not state a quote
+date; the records note the page capture date instead. These are snapshots, not
+claims that the source price lists are current.
 
 From the repository root:
 
@@ -51,5 +53,6 @@ Never commit `.env`; it is ignored by Git. `OPENAI_MODEL` can be changed there
 if needed.
 
 The local retrieval index uses SQLite FTS5. Live LeFranc/Numista fetching is
-not enabled: populate the JSONL files only from data you are permitted to use,
-or connect an authorized source API/export before relying on catalog prices.
+not enabled: populate the catalog files only from data you are permitted to
+use, or connect an authorized source API/export before relying on catalog
+prices.

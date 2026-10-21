@@ -16,11 +16,14 @@ retrieval.
 - Import JSON arrays and JSON Lines (`.jsonl`) catalog files.
 
 The repository includes a Numista 1 franc Morlon data snapshot for 1931–1941
-in [`catalog/catalog.json`](catalog/catalog.json). It contains grade prices,
-mintages, frequency figures, and the LeFranc references supplied for the
-catalog entries. The 1935 price rows are listed as VF €12, XF €15, and AU €19.
-See the [catalog data instructions](catalog/sources/README.md) for the format
-and source notes.
+in [`catalog/catalog.json`](catalog/catalog.json), with grade prices, mintages,
+frequency figures, and LeFranc references. The 1935 Numista prices are listed
+as VF €12, XF €15, and AU €19. LeFranc values for the same series are stored
+separately in
+[`catalog/lefranc_1_franc_morlon.json`](catalog/lefranc_1_franc_morlon.json),
+preserving LeFranc's grades and EUR/USD values. Ingesting `catalog/` indexes
+both sources. See the [catalog data instructions](catalog/sources/README.md)
+for the format and source notes.
 
 Catalog values are reference data, not a guaranteed current selling price or
 appraisal. Coin condition is only a visual estimate and is not professional
@@ -92,7 +95,7 @@ are `numista` and `lefranc`. Preserve source links and the grade to which each
 price applies. Do not enter model-generated estimates as catalog prices.
 
 Read [catalog/sources/README.md](catalog/sources/README.md) for a record example
-and details of the supplied Numista snapshot.
+and details of the supplied Numista and LeFranc snapshots.
 
 ## Tests
 

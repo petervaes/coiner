@@ -49,6 +49,7 @@ class CatalogEntry:
     mintage: int | None = None
     frequency_percent: float | None = None
     related_source_url: str | None = None
+    collection_grade: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> "CatalogEntry":
@@ -122,6 +123,7 @@ class CatalogEntry:
             "catalog_reference",
             "notes",
             "mint_mark",
+            "collection_grade",
         )
         optional_values: dict[str, str | None] = {}
         for field in optional_fields:
@@ -179,6 +181,7 @@ class CatalogEntry:
             mintage=mintage_value,
             frequency_percent=frequency_value,
             related_source_url=related_source_url,
+            collection_grade=optional_values["collection_grade"],
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -196,6 +199,7 @@ class CatalogEntry:
                 self.mint_mark,
                 self.ruler_or_issuer,
                 self.catalog_reference,
+                self.collection_grade,
                 self.condition,
                 str(self.mintage) if self.mintage is not None else None,
                 f"{self.frequency_percent:g}%"
