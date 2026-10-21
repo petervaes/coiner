@@ -1,7 +1,9 @@
 # Catalog source data
 
-The CLI indexes JSON Lines (`.jsonl`) files in this directory. Each line is one
-document with a source-backed catalog price. Keep the original source URL,
+The CLI indexes JSON arrays (`.json`) and JSON Lines (`.jsonl`) files in the
+catalog directory. JSONL files contain one source-backed price per line. A JSON
+record can also group prices by grade using a `prices` object, which the index
+expands into individual grade-specific records. Keep the original source URL,
 currency, condition, and date with every price; do not enter an AI-generated
 estimate as a catalog value.
 
@@ -16,7 +18,14 @@ Required fields:
 URL and values with verified data before indexing; this repository does not ship
 catalog prices.
 
-Install the CLI from the repository root:
+Install the CLI The Numista 1 franc Morlon table provided for this project is stored in
+[`../catalog.json`](../catalog.json). It includes the listed 1931-1941 variants,
+grade prices, mintages, frequencies, and associated LeFranc references. The
+1935 prices are aligned to VF, XF, and AU as shown by the supplied table's
+column positions. Its values are a snapshot entered on the date shown in each
+record, not a claim that the source price list is current.
+
+From the repository root:
 
 ```powershell
 python -m pip install -e .
@@ -25,7 +34,7 @@ python -m pip install -e .
 Then import catalog data and run the CLI:
 
 ```powershell
-python -m coiner ingest --source-dir catalog/sources --database data/coiner.sqlite3
+python -m coiner ingest --source-dir catalog --database data/coiner.sqlite3
 python -m coiner analyze .\coin.jpg --database data/coiner.sqlite3
 python -m coiner search "France 1 franc 1900" --database data/coiner.sqlite3
 ```

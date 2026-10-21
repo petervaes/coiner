@@ -91,3 +91,46 @@ def test_rebuild_removes_old_entries(tmp_path: Path) -> None:
     index.ingest(source_dir, clear=True)
 
     assert len(index.search("France 1 franc 1900")) == 1
+
+
+def test_numista_table_import_expands_grade_prices_and_keeps_metadata(
+    tmp_path: Path,
+) -> None:
+    project_catalog = Path(__file__).parents[1] / "catalog" / "catalog.json"
+    index = CatalogIndex(tmp_path / "numista.sqlite3")
+
+    assert index.ingest(project_catalog.parent) == 68
+    results = index.search(
+        "France 1 franc Morlon 1935",
+        limit=10,
+        country="France",
+        denomination="1 franc",
+        year=1935,
+    )
+
+    assert {entry.condition: entry.price for entry in results} == {
+        "VF": 12.0,
+        "XF": 15.0,
+        "AU": 19.0,
+    }
+    assert all(entry.mintage == 1_166_038 for entry in results)
+    assert all(entry.frequency_percent == 7 for entry in results)
+    assert all(entry.mint_mark == "Wing" for entry in results)
+    assert all(
+        entry.related_source_url
+        == "https://www.lefranc.net/monnaie,numista,219.html"
+        for entry in results
+    )
+
+
+def test_catalog_rejects_invalid_grade_price_object(tmp_path: Path) -> None:
+    source_dir = tmp_path / "sources"
+    source_dir.mkdir()
+    (source_dir / "invalid.json").write_text(
+        json.dumps([{"id": "invalid", "prices": []}]),
+        encoding="utf-8",
+    )
+    index = CatalogIndex(tmp_path / "catalog.sqlite3")
+
+    with pytest.raises(ValueError, match="prices must be a non-empty"):
+        index.ingest(source_dir)

@@ -11,7 +11,7 @@ from coiner.models import CoinIdentity
 from coiner.vision import VisionError, identify_coin
 
 DEFAULT_DATABASE = Path("data/coiner.sqlite3")
-DEFAULT_SOURCE_DIR = Path("catalog/sources")
+DEFAULT_SOURCE_DIR = Path("catalog")
 
 
 def _normalize(value: str) -> str:
@@ -22,7 +22,13 @@ def _normalize(value: str) -> str:
 def _exact_catalog_matches(
     catalog: CatalogIndex, identity: CoinIdentity
 ) -> list[dict[str, object]]:
-    candidates = catalog.search(identity.search_text(), limit=25)
+    candidates = catalog.search(
+        identity.search_text(),
+        limit=25,
+        country=identity.country,
+        denomination=identity.denomination,
+        year=identity.year,
+    )
     matches = [
         entry
         for entry in candidates

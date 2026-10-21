@@ -45,6 +45,10 @@ class CatalogEntry:
     ruler_or_issuer: str | None = None
     catalog_reference: str | None = None
     notes: str | None = None
+    mint_mark: str | None = None
+    mintage: int | None = None
+    frequency_percent: float | None = None
+    related_source_url: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> "CatalogEntry":
@@ -117,6 +121,7 @@ class CatalogEntry:
             "ruler_or_issuer",
             "catalog_reference",
             "notes",
+            "mint_mark",
         )
         optional_values: dict[str, str | None] = {}
         for field in optional_fields:
@@ -124,6 +129,35 @@ class CatalogEntry:
             if value is not None and not isinstance(value, str):
                 raise ValueError(f"{field} must be a string or null")
             optional_values[field] = value
+
+        mintage_value = data.get("mintage")
+        if mintage_value is not None and (
+            not isinstance(mintage_value, int)
+            or isinstance(mintage_value, bool)
+            or mintage_value < 0
+        ):
+            raise ValueError("mintage must be a non-negative integer or null")
+
+        frequency_value = data.get("frequency_percent")
+        if frequency_value is not None:
+            if isinstance(frequency_value, bool):
+                raise ValueError("frequency_percent must be a number from 0 to 100")
+            try:
+                frequency_value = float(frequency_value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "frequency_percent must be a number from 0 to 100"
+                ) from exc
+            if not isfinite(frequency_value) or not 0 <= frequency_value <= 100:
+                raise ValueError("frequency_percent must be a number from 0 to 100")
+
+        related_source_url = data.get("related_source_url")
+        if related_source_url is not None:
+            if not isinstance(related_source_url, str) or not related_source_url.strip():
+                raise ValueError("related_source_url must be a non-empty HTTPS URL")
+            parsed_related_url = urlparse(related_source_url)
+            if parsed_related_url.scheme != "https" or not parsed_related_url.netloc:
+                raise ValueError("related_source_url must be an HTTPS URL")
 
         return cls(
             id=str(data["id"]),
@@ -141,6 +175,10 @@ class CatalogEntry:
             ruler_or_issuer=optional_values["ruler_or_issuer"],
             catalog_reference=optional_values["catalog_reference"],
             notes=optional_values["notes"],
+            mint_mark=optional_values["mint_mark"],
+            mintage=mintage_value,
+            frequency_percent=frequency_value,
+            related_source_url=related_source_url,
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -155,9 +193,14 @@ class CatalogEntry:
                 self.denomination,
                 str(self.year) if self.year is not None else None,
                 self.mint,
+                self.mint_mark,
                 self.ruler_or_issuer,
                 self.catalog_reference,
                 self.condition,
+                str(self.mintage) if self.mintage is not None else None,
+                f"{self.frequency_percent:g}%"
+                if self.frequency_percent is not None
+                else None,
                 self.notes,
             )
             if value
