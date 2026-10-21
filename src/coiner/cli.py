@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Sequence
 
 from coiner.catalog import CatalogIndex
+from coiner.html_catalog_parser import parse_coin_catalog_file
 from coiner.models import CoinIdentity
 from coiner.vision import VisionError, identify_coin
 
@@ -61,12 +62,46 @@ def _build_parser() -> argparse.ArgumentParser:
     search.add_argument("query")
     search.add_argument("--database", type=Path, default=DEFAULT_DATABASE)
     search.add_argument("--limit", type=int, default=5)
+
+    parse_html = commands.add_parser(
+        "parse-html",
+        help="Parse a locally saved coin catalog HTML page into JSON records",
+    )
+    parse_html.add_argument("html_file", type=Path)
+    parse_html.add_argument("--source", choices=("numista", "lefranc"), required=True)
+    parse_html.add_argument("--source-url", required=True)
+    parse_html.add_argument("--country", required=True)
+    parse_html.add_argument("--denomination", required=True)
+    parse_html.add_argument("--year", type=int)
+    parse_html.add_argument("--currency", default="EUR")
+    parse_html.add_argument("--capture-date")
+    parse_html.add_argument("--output", type=Path)
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
     try:
+        if args.command == "parse-html":
+            records = parse_coin_catalog_file(
+                args.html_file,
+                source=args.source,
+                source_url=args.source_url,
+                country=args.country,
+                denomination=args.denomination,
+                year=args.year,
+                currency=args.currency,
+                capture_date=args.capture_date,
+            )
+            output = json.dumps(records, ensure_ascii=False, indent=2)
+            if args.output:
+                args.output.parent.mkdir(parents=True, exist_ok=True)
+                args.output.write_text(output + "\n", encoding="utf-8")
+                print(json.dumps({"parsed_records": len(records), "output": str(args.output)}))
+            else:
+                print(output)
+            return
+
         catalog = CatalogIndex(args.database)
         if args.command == "ingest":
             count = catalog.ingest(args.source_dir, clear=args.rebuild)

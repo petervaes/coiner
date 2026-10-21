@@ -10,7 +10,12 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 from coiner.catalog import CatalogIndex
 from coiner.models import CatalogEntry, CoinAssessment
-from coiner.valuation import PriceEvaluation, evaluate_catalog_prices
+from coiner.valuation import (
+    PriceEvaluation,
+    canonical_grade,
+    evaluate_catalog_prices,
+    select_nearest_matches,
+)
 from coiner.vision_inspection import inspect_coin_images
 from coiner.vision import VisionError
 
@@ -46,6 +51,7 @@ def _matches_dataframe(entries: list[CatalogEntry]) -> pd.DataFrame:
             "Munt": entry.title,
             "Jaar": entry.year,
             "Conditie": entry.condition,
+            "Genormaliseerde conditie": canonical_grade(entry.condition) or "—",
             "Catalogusprijs": entry.price,
             "Valuta": entry.currency,
             "Bron": entry.source.title(),
@@ -60,7 +66,7 @@ def _matches_dataframe(entries: list[CatalogEntry]) -> pd.DataFrame:
 def _report_json(
     assessment: CoinAssessment,
     entries: list[CatalogEntry],
-    evaluation: PriceEvaluation,
+    evaluations: list[PriceEvaluation],
 ) -> bytes:
     report = {
         "report_date": date.today().isoformat(),
@@ -70,14 +76,19 @@ def _report_json(
             "notes": assessment.condition_notes,
             "disclaimer": "AI-visuele indicatie; geen professionele certificering.",
         },
-        "market_price_evaluation": {
-            "price": evaluation.price,
-            "currency": evaluation.currency,
-            "explanation": evaluation.explanation,
-            "supporting_catalog_entries": [
-                entry.to_dict() for entry in evaluation.supporting_entries
-            ],
-        },
+        "catalog_price_evaluations": [
+            {
+                "source": evaluation.source,
+                "price": evaluation.price,
+                "currency": evaluation.currency,
+                "matched_conditions": list(evaluation.matched_conditions),
+                "canonical_grade": evaluation.canonical_grade,
+                "supporting_catalog_entries": [
+                    entry.to_dict() for entry in evaluation.entries
+                ],
+            }
+            for evaluation in evaluations
+        ],
         "nearest_catalog_matches": [entry.to_dict() for entry in entries],
         "catalog_disclaimer": (
             "De catalogus bevat vastgelegde bron-snapshots; dit zijn geen live "
@@ -130,19 +141,14 @@ def main() -> None:
                 denomination=identity.denomination,
                 year=identity.year,
             )
-            matches.sort(
-                key=lambda entry: (
-                    entry.condition.casefold() != assessment.condition.casefold(),
-                    entry.source,
-                    entry.condition,
-                )
-            )
-            matches = matches[:3]
-            evaluation = evaluate_catalog_prices(matches, assessment.condition)
+            candidates = matches
+            matches = select_nearest_matches(candidates, assessment.condition)
+            evaluation = evaluate_catalog_prices(candidates, assessment.condition)
             st.session_state["coin_result"] = {
                 "key": current_key,
                 "assessment": assessment,
                 "matches": matches,
+                "candidates": candidates,
                 "evaluation": evaluation,
             }
         except (VisionError, FileNotFoundError, ValueError) as exc:
@@ -167,7 +173,7 @@ def main() -> None:
 
     assessment = result["assessment"]
     matches = result["matches"]
-    evaluation = result["evaluation"]
+    evaluations = result["evaluation"]
     left, right = st.columns([1, 1])
     with left:
         st.subheader("Muntfoto")
@@ -209,17 +215,33 @@ def main() -> None:
             "Geen catalogusmatches voor deze munt; er wordt geen prijs afgeleid."
         )
 
-    st.subheader("Prijsindicatie en rapport")
-    if evaluation.price is not None:
-        st.success(
-            f"Catalogusindicatie: {evaluation.price:.2f} {evaluation.currency}"
-        )
+    st.subheader("Cataloguswaarderingen per bron")
+    if evaluations:
+        source_columns = st.columns(len(evaluations))
+        for column, evaluation in zip(source_columns, evaluations):
+            with column:
+                st.metric(
+                    f"{evaluation.source.title()} ({evaluation.currency})",
+                    f"{evaluation.price:.2f} {evaluation.currency}",
+                )
+                st.caption(
+                    "Conditie "
+                    f"{', '.join(evaluation.matched_conditions)} gematcht als "
+                    f"{evaluation.canonical_grade}; catalogus-snapshot, geen "
+                    "live marktprijs."
+                )
     else:
-        st.warning("Geen betrouwbare prijsindicatie beschikbaar.")
-    st.write(evaluation.explanation)
+        st.warning(
+            "Geen prijs gevonden met een bekende equivalente conditie. "
+            "De conditielabels zijn niet automatisch gematcht."
+        )
+    st.caption(
+        "Numista en LeFranc worden apart getoond; hun prijzen worden niet "
+        "gemiddeld of tussen valuta omgerekend."
+    )
     st.download_button(
         "Download taxatierapport (JSON)",
-        data=_report_json(assessment, matches, evaluation),
+        data=_report_json(assessment, matches, evaluations),
         file_name="coiner-taxatierapport.json",
         mime="application/json",
     )

@@ -56,3 +56,48 @@ The local retrieval index uses SQLite FTS5. Live LeFranc/Numista fetching is
 not enabled: populate the catalog files only from data you are permitted to
 use, or connect an authorized source API/export before relying on catalog
 prices.
+
+## Parsing a saved HTML snapshot
+
+The generic standard-library parser supports local HTML tables whose header
+cells use recognized grade labels (for example `G`, `F`, `VF`, `B`, `TB`,
+`TTB`, `SUP`, `SPL`, and `FDC`). It can also extract a year, mintage, and
+explicit currency where present. Provide the country, denomination, source URL,
+and capture date explicitly. It creates the same grouped `prices` records
+accepted by the catalog index:
+
+```powershell
+python -m coiner parse-html .\coin-page.html `
+  --source lefranc `
+  --source-url "https://www.lefranc.net/monnaie,1-franc-morlon,219.html" `
+  --country France `
+  --denomination "1 franc" `
+  --capture-date 2026-10-21 `
+  --output .\catalog\imports\france-1-franc-morlon.html.json
+```
+
+The parser is intentionally offline. It does not fetch URLs or bypass source
+access controls. The capture date is not treated as the source's quotation date
+unless the source itself provides that date separately.
+
+## Grade-label matching
+
+The interface preserves the grade as published by each catalog, and also
+normalizes recognized English/French labels for retrieval and comparison:
+
+| Normalized grade | Recognized labels |
+| --- | --- |
+| G | G, Good |
+| VG | VG, Very Good, TB, Très Beau |
+| F | F, Fine, B, Beau |
+| VF | VF, Very Fine, TTB, Très Très Beau |
+| XF | XF, EF, Extremely Fine, SUP, Superbe |
+| AU | AU, About Uncirculated, SPL, Splendide |
+| UNC | UNC, Uncirculated, MS, Mint State, FDC, Fleur de Coin |
+
+In particular, **B (Beau) is matched to F (Fine)** as requested. The French /
+English equivalences are approximate lookup aliases, not an official universal
+conversion between grading systems. Stored prices and grade labels are never
+rewritten. Numista and LeFranc values are displayed separately and are not
+averaged across sources or converted between currencies. For background on the
+numeric grading scale, see [NGC's grading scale](https://www.ngccoin.com/coin-grading/grading-scale/).

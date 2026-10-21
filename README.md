@@ -12,11 +12,15 @@ retrieval, and includes a Streamlit interface for photo inspection and reports.
 - Search indexed catalog entries by text.
 - Show the three closest source-attributed catalog entries and download a JSON
   valuation report.
+- Show Numista and LeFranc price indications separately, with explicit
+  cross-language grade matching.
 - Require exact country and denomination matches, and an exact year match when
   the year was identified, before showing prices for an analyzed coin.
 - Keep each catalog price linked to its source, grade/condition, currency, and
   date.
 - Import JSON arrays and JSON Lines (`.jsonl`) catalog files.
+- Parse saved Numista or LeFranc HTML price tables into catalog JSON without
+  making network requests.
 
 The repository includes a Numista 1 franc Morlon data snapshot for 1931–1941
 in [`catalog/catalog.json`](catalog/catalog.json), with grade prices, mintages,
@@ -91,8 +95,37 @@ streamlit run src\coiner\streamlit_app.py
 Upload one photo or both sides in the sidebar and select **Inspecteer munt**.
 This sends the uploaded images to OpenAI Vision. The catalog values in this
 prototype are recorded snapshots, not live quotes. A price indication is
-calculated only from EUR entries with the exact same grade; otherwise the app
-explains why it cannot provide a comparable figure.
+calculated separately for each catalog source and currency when a recognized
+equivalent grade is available. French and English grade abbreviations are
+normalized for matching; the original source labels remain visible. These
+cross-language equivalences are approximate and do not change the source data
+or imply professional grading.
+
+### Import a saved catalog HTML page
+
+When an identified coin is missing locally, save a catalog page as UTF-8 HTML
+using a method permitted by that source, then parse its grade/price table:
+
+```powershell
+python -m coiner parse-html .\coin-page.html `
+  --source lefranc `
+  --source-url "https://www.lefranc.net/monnaie,1-franc-morlon,219.html" `
+  --country France `
+  --denomination "1 franc" `
+  --capture-date 2026-10-21 `
+  --output .\catalog\imports\france-1-franc-morlon.html.json
+
+python -m coiner ingest --source-dir catalog --database data/coiner.sqlite3 --rebuild
+```
+
+The generic parser detects common English/French grade headers, years, mintages,
+and explicit currencies in HTML tables. It requires the coin identity and source
+URL as inputs to avoid inventing them. The capture date is stored as the
+snapshot date; the parser does not claim it is the source's quotation date.
+This command only parses a local file: it does not search the web, download
+pages, imitate a browser, or bypass HTTP errors or access controls. If a source
+returns 4xx, use its official API, an authorized export, or ask its operator
+for permission.
 
 The module entry point is also available:
 
