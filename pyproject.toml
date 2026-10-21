@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coiner"
+version = "0.1.0"
+description = "Coin identification and source-backed numismatic catalog lookup"
+requires-python = ">=3.11"
+dependencies = ["python-dotenv>=1.0"]
+
+[project.scripts]
+coiner = "coiner.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
