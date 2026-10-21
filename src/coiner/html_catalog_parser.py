@@ -16,8 +16,12 @@ class HTMLCatalogParseError(ValueError):
 
 
 class _Cell:
-    def __init__(self, tag: str) -> None:
+    def __init__(
+        self, tag: str, *, colspan: int = 1, rowspan: int = 1
+    ) -> None:
         self.tag = tag
+        self.colspan = colspan
+        self.rowspan = rowspan
         self.parts: list[str] = []
 
     @property
@@ -52,7 +56,12 @@ class _TableParser(HTMLParser):
         elif tag == "tr" and self._table is not None:
             self._row = []
         elif tag in {"th", "td"} and self._row is not None:
-            self._cell = _Cell(tag)
+            attributes = dict(attrs)
+            self._cell = _Cell(
+                tag,
+                colspan=max(1, int(attributes.get("colspan") or 1)),
+                rowspan=max(1, int(attributes.get("rowspan") or 1)),
+            )
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "title":
@@ -81,7 +90,9 @@ class _TableParser(HTMLParser):
 
 
 _YEAR = re.compile(r"(?<!\d)(1[5-9]\d{2}|20\d{2})(?!\d)")
-_NUMBER = re.compile(r"(?<!\w)(\d[\d\s.,'’]*\d|\d)(?!\w)")
+_NUMBER = re.compile(
+    r"(?<!\w)(\d{1,3}(?:[ .,'’]\d{3})+(?:[,.]\d{1,2})?|\d+(?:[,.]\d{1,2})?)(?!\w)"
+)
 _CURRENCIES = (
     ("EUR", re.compile(r"(?:€|\bEUR\b)", re.IGNORECASE)),
     ("USD", re.compile(r"(?:\$|\bUSD\b)", re.IGNORECASE)),
@@ -180,6 +191,68 @@ def _header_columns(
     return best
 
 
+def _grade_header_label(value: str) -> str | None:
+    match = re.match(
+        r"^\s*(FDC|TTB|SPL|SUP|UNC|XF|EF|VF|VG|TB|AU|F|B|G)\b",
+        value,
+        flags=re.IGNORECASE,
+    )
+    return match.group(1).upper() if match else None
+
+
+def _lefranc_table_header(
+    rows: Sequence[Sequence[_Cell]],
+) -> tuple[int, int, int, int, int, list[str], str] | None:
+    for header_index, row in enumerate(rows[:8]):
+        price_index = next(
+            (
+                index
+                for index, cell in enumerate(row)
+                if "prix" in _plain_text(cell.text) and cell.colspan > 1
+            ),
+            None,
+        )
+        if price_index is None or header_index + 1 >= len(rows):
+            continue
+        grade_cells = rows[header_index + 1]
+        grades = [_grade_header_label(cell.text) for cell in grade_cells]
+        if not grades or any(grade is None for grade in grades):
+            continue
+
+        start_column = sum(cell.colspan for cell in row[:price_index])
+        reference_index: int | None = None
+        year_index: int | None = None
+        mint_index: int | None = None
+        collection_grade_index: int | None = None
+        column = 0
+        for cell in row:
+            header = _plain_text(cell.text)
+            if "franc" in header and ("n" in header or "no" in header):
+                reference_index = column
+            elif header in _YEAR_HEADERS or header == "date":
+                year_index = column
+            elif header in {"atelier", "mint", "mintmark"}:
+                mint_index = column
+            elif "collection ideale" in header:
+                collection_grade_index = column
+            column += cell.colspan
+        if year_index is None:
+            continue
+        currencies = _plain_text(row[price_index].text)
+        return (
+            header_index + 2,
+            start_column,
+            year_index,
+            mint_index if mint_index is not None else -1,
+            collection_grade_index
+            if collection_grade_index is not None
+            else -1,
+            [grade for grade in grades if grade is not None],
+            currencies,
+        )
+    return None
+
+
 def _vertical_header_columns(
     rows: Sequence[Sequence[_Cell]],
 ) -> tuple[int, int, int, dict[int, str]] | None:
@@ -258,6 +331,101 @@ def parse_coin_catalog_html(
     page_fingerprint = hashlib.sha256(source_url.encode("utf-8")).hexdigest()[:8]
 
     for table in parser.tables:
+        lefranc_header = _lefranc_table_header(table.rows)
+        if lefranc_header is not None:
+            (
+                data_start,
+                grade_start,
+                year_index,
+                mint_index,
+                collection_grade_index,
+                grades,
+                price_header,
+            ) = lefranc_header
+            reference_index = 0
+            for row in table.rows[data_start:]:
+                values = [cell.text for cell in row]
+                if year_index >= len(values):
+                    continue
+                year_match = _YEAR.search(values[year_index])
+                row_year = int(year_match.group(1)) if year_match else year
+                if row_year is None:
+                    continue
+                prices_by_currency: dict[str, dict[str, float]] = defaultdict(dict)
+                for grade_offset, grade in enumerate(grades):
+                    cell_index = grade_start + grade_offset
+                    if cell_index >= len(values):
+                        continue
+                    cell_text = values[cell_index]
+                    numbers = [
+                        _normalize_number(match.group(1))
+                        for match in _NUMBER.finditer(cell_text)
+                    ]
+                    numbers = [number for number in numbers if number is not None]
+                    if not numbers:
+                        continue
+                    if "euros" in price_header and "dollars" in price_header:
+                        if len(numbers) >= 2:
+                            prices_by_currency["EUR"][grade] = numbers[0]
+                            prices_by_currency["USD"][grade] = numbers[1]
+                        else:
+                            prices_by_currency[normalized_currency][grade] = numbers[0]
+                    else:
+                        parsed_price = _parse_price(cell_text, normalized_currency)
+                        if parsed_price:
+                            price_currency, price = parsed_price
+                            prices_by_currency[price_currency][grade] = price
+                if not prices_by_currency:
+                    continue
+
+                row_number += 1
+                catalog_reference = (
+                    values[reference_index].strip()
+                    if reference_index < len(values)
+                    else ""
+                )
+                mint = (
+                    values[mint_index].strip()
+                    if 0 <= mint_index < len(values)
+                    else ""
+                )
+                collection_grade = (
+                    values[collection_grade_index].strip()
+                    if 0 <= collection_grade_index < len(values)
+                    else ""
+                )
+                for price_currency, prices in prices_by_currency.items():
+                    slug = re.sub(
+                        r"[^a-z0-9]+",
+                        "-",
+                        f"{normalized_source}-{country}-{denomination}-{row_year}-{page_fingerprint}-{row_number}-{price_currency}",
+                        flags=re.IGNORECASE,
+                    ).strip("-").lower()
+                    record: dict[str, object] = {
+                        "id": slug,
+                        "title": title,
+                        "country": country.strip(),
+                        "denomination": denomination.strip(),
+                        "source": normalized_source,
+                        "source_url": source_url,
+                        "prices": prices,
+                        "currency": price_currency,
+                        "as_of": capture_date,
+                        "year": row_year,
+                        "notes": (
+                            f"Parsed from a local HTML snapshot captured on {capture_date}; "
+                            "the source quotation date was not inferred."
+                        ),
+                    }
+                    if catalog_reference:
+                        record["catalog_reference"] = catalog_reference
+                    if mint:
+                        record["mint"] = mint
+                    if collection_grade:
+                        record["collection_grade"] = collection_grade
+                    grouped_records.append(record)
+            continue
+
         header = _header_columns(table.rows)
         if header is None:
             vertical_header = _vertical_header_columns(table.rows)

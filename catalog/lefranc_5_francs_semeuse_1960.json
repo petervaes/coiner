@@ -1,0 +1,38 @@
+[
+  {
+    "id": "lefranc-france-5-francs-1960-23d67099-4-eur",
+    "title": "France 5 francs Semeuse, silver (1960)",
+    "country": "France",
+    "denomination": "5 francs",
+    "source": "lefranc",
+    "source_url": "https://www.lefranc.net/monnaie,numista,340.html",
+    "prices": {
+      "SPL": 13.0,
+      "FDC": 50.0
+    },
+    "currency": "EUR",
+    "as_of": "2026-10-21",
+    "year": 1960,
+    "catalog_reference": "F.340/4",
+    "collection_grade": "67",
+    "notes": "Parsed from the LeFranc page on 2026-10-21. The page does not state a separate quotation date."
+  },
+  {
+    "id": "lefranc-france-5-francs-1960-23d67099-4-usd",
+    "title": "France 5 francs Semeuse, silver (1960)",
+    "country": "France",
+    "denomination": "5 francs",
+    "source": "lefranc",
+    "source_url": "https://www.lefranc.net/monnaie,numista,340.html",
+    "prices": {
+      "SPL": 14.56,
+      "FDC": 56.0
+    },
+    "currency": "USD",
+    "as_of": "2026-10-21",
+    "year": 1960,
+    "catalog_reference": "F.340/4",
+    "collection_grade": "67",
+    "notes": "Parsed from the LeFranc page on 2026-10-21. The page does not state a separate quotation date."
+  }
+]

@@ -9,6 +9,7 @@ import streamlit as st
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 from coiner.catalog import CatalogIndex
+from coiner.catalog_fallback import CatalogFallbackError, resolve_catalog_miss
 from coiner.models import CatalogEntry, CoinAssessment
 from coiner.valuation import (
     PriceEvaluation,
@@ -142,6 +143,17 @@ def main() -> None:
                 year=identity.year,
             )
             candidates = matches
+            fallback_messages: tuple[str, ...] = ()
+            coin_metadata: tuple[dict[str, object], ...] = ()
+            if not candidates:
+                fallback = resolve_catalog_miss(
+                    identity,
+                    catalog=get_catalog(),
+                    catalog_dir=CATALOG_DIR,
+                )
+                candidates = list(fallback.entries)
+                fallback_messages = fallback.messages
+                coin_metadata = fallback.metadata
             matches = select_nearest_matches(candidates, assessment.condition)
             evaluation = evaluate_catalog_prices(candidates, assessment.condition)
             st.session_state["coin_result"] = {
@@ -150,8 +162,10 @@ def main() -> None:
                 "matches": matches,
                 "candidates": candidates,
                 "evaluation": evaluation,
+                "fallback_messages": fallback_messages,
+                "coin_metadata": coin_metadata,
             }
-        except (VisionError, FileNotFoundError, ValueError) as exc:
+        except (VisionError, FileNotFoundError, ValueError, CatalogFallbackError) as exc:
             st.error(f"Inspectie mislukt: {exc}")
 
     result = st.session_state.get("coin_result")
@@ -174,6 +188,8 @@ def main() -> None:
     assessment = result["assessment"]
     matches = result["matches"]
     evaluations = result["evaluation"]
+    fallback_messages = result["fallback_messages"]
+    coin_metadata = result["coin_metadata"]
     left, right = st.columns([1, 1])
     with left:
         st.subheader("Muntfoto")
@@ -212,8 +228,22 @@ def main() -> None:
         )
     else:
         st.warning(
-            "Geen catalogusmatches voor deze munt; er wordt geen prijs afgeleid."
+            "Geen geverifieerde catalogusprijs gevonden; er wordt geen prijs afgeleid."
         )
+    if coin_metadata:
+        with st.expander("Numista-muntinformatie zonder prijsnotering"):
+            for metadata in coin_metadata:
+                st.write(
+                    {
+                        "Titel": metadata.get("title"),
+                        "Referentie": metadata.get("catalog_reference"),
+                        "Jaar": metadata.get("year"),
+                        "Bron": metadata.get("source_url"),
+                        "Vastgelegd op": metadata.get("capture_date"),
+                    }
+                )
+    for message in fallback_messages:
+        st.caption(message)
 
     st.subheader("Cataloguswaarderingen per bron")
     if evaluations:

@@ -81,6 +81,41 @@ def test_parses_french_lefranc_grade_labels_and_european_numbers() -> None:
     assert records[0]["mintage"] == 1_166_038
 
 
+def test_parses_lefranc_spanned_headers_and_eur_usd_price_pairs() -> None:
+    html = """
+    <html><head><title>Pièce de monnaie 5 Francs SEMEUSE, ARGENT</title></head>
+    <body><table>
+      <tr>
+        <td rowspan="2">N° de FRANC</td><td rowspan="2">Date</td>
+        <td rowspan="2">Atelier</td><td colspan="6">Prix en Euros Dollars</td>
+        <td rowspan="2">Grade dans la Collection Idéale</td>
+      </tr>
+      <tr><td>B 10 (€)</td><td>TB 25 (€)</td><td>TTB 45 (€)</td>
+        <td>SUP 58 (€)</td><td>SPL 63 (€)</td><td>FDC 65 (€)</td></tr>
+      <tr><td>F.340/4</td><td>1960</td><td></td><td>-</td><td>-</td>
+        <td>-</td><td>-</td><td><span>13,00</span><span>14,56</span></td>
+        <td><span>50,00</span><span>56,00</span></td><td>67</td></tr>
+    </table></body></html>
+    """
+
+    records = parse_coin_catalog_html(
+        html,
+        source="lefranc",
+        source_url="https://www.lefranc.net/monnaie,numista,340.html",
+        country="France",
+        denomination="5 francs",
+        capture_date="2026-10-21",
+    )
+
+    by_currency = {record["currency"]: record for record in records}
+    assert len(records) == 2
+    assert by_currency["EUR"]["prices"] == {"SPL": 13.0, "FDC": 50.0}
+    assert by_currency["USD"]["prices"] == {"SPL": 14.56, "FDC": 56.0}
+    assert by_currency["EUR"]["catalog_reference"] == "F.340/4"
+    assert by_currency["EUR"]["collection_grade"] == "67"
+    assert by_currency["EUR"]["year"] == 1960
+
+
 def test_splits_currencies_when_values_are_explicit_per_cell() -> None:
     html = """
     <table>
@@ -216,6 +251,33 @@ def test_parsed_records_can_be_ingested_by_catalog_index(tmp_path: Path) -> None
     assert {entry.condition: entry.price for entry in entries} == {
         "F (Fine)": 10,
         "VF": 12,
+    }
+
+
+def test_imported_5_francs_1960_snapshot_has_both_currency_series(
+    tmp_path: Path,
+) -> None:
+    catalog_dir = Path(__file__).parents[1] / "catalog"
+    catalog = CatalogIndex(tmp_path / "catalog.sqlite3")
+    catalog.ingest(catalog_dir)
+    entries = catalog.search(
+        "France 5 francs 1960",
+        country="France",
+        denomination="5 francs",
+        year=1960,
+        limit=10,
+    )
+    prices = {
+        (entry.currency, entry.condition): entry.price
+        for entry in entries
+        if entry.source == "lefranc"
+    }
+
+    assert prices == {
+        ("EUR", "SPL"): 13,
+        ("EUR", "FDC"): 50,
+        ("USD", "SPL"): 14.56,
+        ("USD", "FDC"): 56,
     }
 
 

@@ -27,6 +27,14 @@ class CatalogIndex:
                 USING fts5(id UNINDEXED, title, content, tokenize='unicode61')
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS coin_metadata (
+                    id TEXT PRIMARY KEY,
+                    metadata_json TEXT NOT NULL
+                )
+                """
+            )
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -42,8 +50,14 @@ class CatalogIndex:
             connection.close()
 
     def ingest(self, source_dir: Path, clear: bool = False) -> int:
-        files = sorted((*source_dir.rglob("*.jsonl"), *source_dir.rglob("*.json")))
-        if not files:
+        all_files = sorted(
+            (*source_dir.rglob("*.jsonl"), *source_dir.rglob("*.json"))
+        )
+        metadata_files = [
+            path for path in all_files if path.name.endswith(".metadata.json")
+        ]
+        files = [path for path in all_files if path not in metadata_files]
+        if not files and not metadata_files:
             raise FileNotFoundError(f"No JSON or JSONL catalog files found in {source_dir}")
 
         entries: list[CatalogEntry] = []
@@ -71,10 +85,25 @@ class CatalogIndex:
                     raise
                 raise ValueError(f"{path}: {exc}") from exc
 
+        metadata_records: list[dict[str, object]] = []
+        for path in metadata_files:
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"{path}: {exc}") from exc
+            if not isinstance(data, list) or any(
+                not isinstance(record, dict) for record in data
+            ):
+                raise ValueError(
+                    f"{path}: metadata catalog must contain an array of objects"
+                )
+            metadata_records.extend(data)
+
         with self._connect() as connection:
             if clear:
                 connection.execute("DELETE FROM coin_entries")
                 connection.execute("DELETE FROM coin_entries_fts")
+                connection.execute("DELETE FROM coin_metadata")
             for entry in entries:
                 connection.execute(
                     "DELETE FROM coin_entries_fts WHERE id = ?", (entry.id,)
@@ -91,7 +120,40 @@ class CatalogIndex:
                     "INSERT INTO coin_entries_fts (id, title, content) VALUES (?, ?, ?)",
                     (entry.id, entry.title, entry.searchable_text()),
                 )
+            for record in metadata_records:
+                identifier = record.get("id")
+                if not isinstance(identifier, str) or not identifier.strip():
+                    raise ValueError("coin metadata requires a non-empty id")
+                connection.execute(
+                    """
+                    INSERT INTO coin_metadata (id, metadata_json)
+                    VALUES (?, ?)
+                    ON CONFLICT(id) DO UPDATE
+                    SET metadata_json = excluded.metadata_json
+                    """,
+                    (identifier, json.dumps(record, ensure_ascii=False)),
+                )
         return len(entries)
+
+    def store_metadata(self, records: list[dict[str, object]]) -> int:
+        with self._connect() as connection:
+            for record in records:
+                identifier = record.get("id")
+                if not isinstance(identifier, str) or not identifier.strip():
+                    raise ValueError("coin metadata requires a non-empty id")
+                connection.execute(
+                    """
+                    INSERT INTO coin_metadata (id, metadata_json)
+                    VALUES (?, ?)
+                    ON CONFLICT(id) DO UPDATE
+                    SET metadata_json = excluded.metadata_json
+                    """,
+                    (
+                        identifier,
+                        json.dumps(record, ensure_ascii=False),
+                    ),
+                )
+        return len(records)
 
     @staticmethod
     def _parse_catalog_record(data: object, location: str) -> list[CatalogEntry]:

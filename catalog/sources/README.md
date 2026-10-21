@@ -27,6 +27,11 @@ its own grade scale and EUR/USD values. The source page does not state a quote
 date; the records note the page capture date instead. These are snapshots, not
 claims that the source price lists are current.
 
+The LeFranc 5 francs Semeuse silver page is stored for the 1960 variant in
+[`../lefranc_5_francs_semeuse_1960.json`](../lefranc_5_francs_semeuse_1960.json).
+Its F.340/4 row lists SPL and FDC prices in EUR and USD and Collection Idéale
+grade 67. The page does not specify a quotation date.
+
 From the repository root:
 
 ```powershell
@@ -52,10 +57,21 @@ Then replace the placeholder `OPENAI_API_KEY` in `.env` with your API key.
 Never commit `.env`; it is ignored by Git. `OPENAI_MODEL` can be changed there
 if needed.
 
-The local retrieval index uses SQLite FTS5. Live LeFranc/Numista fetching is
-not enabled: populate the catalog files only from data you are permitted to
-use, or connect an authorized source API/export before relying on catalog
-prices.
+The local retrieval index uses SQLite FTS5. The Streamlit app can optionally
+run a catalog-miss fallback when the necessary credentials are configured:
+Numista API lookup, Google Custom Search for LeFranc pages, and then a
+LeFranc denomination-index fallback. A successful LeFranc page is temporarily
+downloaded, parsed, removed from the temporary directory, then persisted as
+JSON and ingested into SQLite. Numista metadata without an explicit
+grade-price table and currency is stored as metadata, not treated as a price.
+
+Set `NUMISTA_API_KEY`, `GOOGLE_CSE_API_KEY`, and `GOOGLE_CSE_ID` in a local
+`.env` file to enable the corresponding online lookups. Google Custom Search
+must be configured for LeFranc. Requests use an allowlist, timeout and
+response-size limit, and do not retry or bypass 4xx responses. API credentials
+and source access must be authorized. The Numista API response contract has
+not been live-verified in this environment; confirm API access before relying
+on that lookup.
 
 ## Parsing a saved HTML snapshot
 

@@ -21,6 +21,10 @@ retrieval, and includes a Streamlit interface for photo inspection and reports.
 - Import JSON arrays and JSON Lines (`.jsonl`) catalog files.
 - Parse saved Numista or LeFranc HTML price tables into catalog JSON without
   making network requests.
+- On a Streamlit catalog miss, optionally query the Numista API and search
+  LeFranc via Google Custom Search, then the LeFranc denomination index.
+- Store parsed LeFranc price data as JSON and in SQLite; store Numista coin
+  metadata separately when no verified grade-price data is available.
 
 The repository includes a Numista 1 franc Morlon data snapshot for 1931–1941
 in [`catalog/catalog.json`](catalog/catalog.json), with grade prices, mintages,
@@ -29,18 +33,24 @@ as VF €12, XF €15, and AU €19. LeFranc values for the same series are stor
 separately in
 [`catalog/lefranc_1_franc_morlon.json`](catalog/lefranc_1_franc_morlon.json),
 preserving LeFranc's grades and EUR/USD values. Ingesting `catalog/` indexes
-both sources. See the [catalog data instructions](catalog/sources/README.md)
-for the format and source notes.
+both sources. The LeFranc 5 francs Semeuse silver page is also parsed for the
+1960 variant in
+[`catalog/lefranc_5_francs_semeuse_1960.json`](catalog/lefranc_5_francs_semeuse_1960.json),
+with separate EUR and USD values. See the
+[catalog data instructions](catalog/sources/README.md) for the format and
+source notes.
 
 Catalog values are reference data, not a guaranteed current selling price or
 appraisal. Coin condition is only a visual estimate and is not professional
-grading. Live price fetching from Numista or LeFranc is not implemented; catalog
-values must be provided as data that you are permitted to use.
+grading. The optional miss fallback retrieves source pages during analysis;
+catalog snapshots are stored locally and are not guaranteed current prices.
 
 ## Requirements
 
 - Python 3.11 or later
 - An OpenAI API key for photo identification
+- Optional Numista API credentials and Google Custom Search credentials for
+  automatic catalog-miss lookup
 
 ## Install
 
@@ -53,7 +63,9 @@ Copy-Item .env.example .env
 
 Edit `.env` and replace the `OPENAI_API_KEY` placeholder with your key. You may
 also change `OPENAI_MODEL` there. Keep `.env` private; it is excluded by
-`.gitignore`.
+`.gitignore`. To enable the optional fallback, also set `NUMISTA_API_KEY`,
+`GOOGLE_CSE_API_KEY`, and `GOOGLE_CSE_ID`; the Google Programmable Search Engine
+must be configured to search LeFranc.
 
 ## Use
 
@@ -122,16 +134,38 @@ The generic parser detects common English/French grade headers, years, mintages,
 and explicit currencies in HTML tables. It requires the coin identity and source
 URL as inputs to avoid inventing them. The capture date is stored as the
 snapshot date; the parser does not claim it is the source's quotation date.
-This command only parses a local file: it does not search the web, download
-pages, imitate a browser, or bypass HTTP errors or access controls. If a source
-returns 4xx, use its official API, an authorized export, or ask its operator
-for permission.
+This command only parses a local file: it does not search the web or download
+pages. The automatic Streamlit fallback is separate and uses the constrained
+downloader described above; it does not imitate a browser or bypass HTTP errors
+or access controls. If a source returns 4xx, use its official API, an authorized
+export, or ask its operator for permission.
 
 The module entry point is also available:
 
 ```powershell
 python -m coiner --help
 ```
+
+### Automatic lookup on a catalog miss
+
+The Streamlit app runs the fallback only when the local index has no exact
+country/denomination/year match. If configured, it queries Numista through its
+API and uses Google Custom Search to discover LeFranc coin pages. If search
+credentials are unavailable or do not find a page, it tries the LeFranc
+denomination index. A downloaded LeFranc HTML page is saved under a unique name
+in a temporary directory, parsed locally, and deleted when parsing ends. Only
+successfully parsed records are added to `catalog/imports/` and ingested into
+SQLite. Numista type metadata is also retained as a separate JSON sidecar and
+SQLite metadata record; no price or currency is inferred when the API does not
+provide a grade-price table and an explicit currency.
+
+The downloader uses Python's standard-library HTTP client, permits only HTTPS
+requests to the configured source hosts, applies a 20-second timeout and 5 MB
+response limit, and does not retry or bypass HTTP 4xx responses. A source or
+configuration failure is shown in the interface; use API access and site data
+only as allowed by the source. The Numista API call requires a valid API key;
+the response contract has not been live-verified in this environment, so
+Numista lookup can fail until credentials and API access are confirmed.
 
 ## Catalog data
 
